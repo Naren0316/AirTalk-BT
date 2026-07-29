@@ -6,7 +6,7 @@ Two devices with Bluetooth radios pair directly and exchange messages over a Blu
 
 ## Status
 
-🚧 Day 1 of 5 — project scaffolding + device discovery. See [Roadmap](#roadmap) below.
+🚧 Day 2 of 5 — Bluetooth connection working (plaintext). See [Roadmap](#roadmap) below.
 
 ## Why
 
@@ -34,7 +34,7 @@ Full protocol design lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | Day | Milestone | Status |
 |-----|-----------|--------|
 | 1 | Repo setup, architecture design, Bluetooth device discovery | ✅ Done |
-| 2 | RFCOMM connection — server + client exchange plaintext messages | ⬜ Pending |
+| 2 | RFCOMM connection — server + client exchange plaintext messages | ✅ Done |
 | 3 | End-to-end encryption layer — X25519 key exchange + AES-256-GCM | ⬜ Pending |
 | 4 | Chat interface (CLI) — message framing, contacts, reconnection handling | ⬜ Pending |
 | 5 | Testing, edge cases, docs, demo, final polish | ⬜ Pending |
@@ -64,7 +64,27 @@ Scan for nearby discoverable Bluetooth devices:
 python src/discovery.py
 ```
 
-This prints the name and MAC address of every discoverable device nearby — the MAC address is what Day 2's connection code will target.
+This prints the name and MAC address of every discoverable device nearby — the MAC address is what Day 2's connection code targets.
+
+### Day 2 — connect and chat (plaintext for now)
+
+On **Device A**, start the server:
+
+```bash
+python src/server.py
+```
+
+It prints the RFCOMM channel it's listening on and waits. Make sure this device is set to **discoverable**.
+
+On **Device B**, connect to it using the MAC address found via `discovery.py`:
+
+```bash
+python src/client.py AA:BB:CC:DD:EE:FF
+```
+
+Once connected, either side can type a message and hit Enter — messages arrive on the other side in real time. Type `/quit` on either side to end the session.
+
+> Messages sent today are plaintext — encryption is added on Day 3. Don't rely on this for anything sensitive yet.
 
 ## Project structure
 
@@ -76,7 +96,10 @@ BlueWhisper/
 ├── docs/
 │   └── ARCHITECTURE.md      # protocol + encryption design
 └── src/
-    └── discovery.py         # Day 1: nearby device scanner
+    ├── discovery.py         # Day 1: nearby device scanner
+    ├── config.py            # Day 2: shared service name/UUID
+    ├── server.py            # Day 2: RFCOMM server (listens for a connection)
+    └── client.py            # Day 2: RFCOMM client (connects by MAC address)
 ```
 
 ## License
