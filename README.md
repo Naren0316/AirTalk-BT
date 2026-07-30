@@ -6,7 +6,7 @@ Two devices with Bluetooth radios pair directly and exchange messages over a Blu
 
 ## Status
 
-🚧 Day 2 of 5 — Bluetooth connection working (plaintext). See [Roadmap](#roadmap) below.
+🚧 Day 3 of 5 — messages are now end-to-end encrypted. See [Roadmap](#roadmap) below.
 
 ## Why
 
@@ -35,7 +35,7 @@ Full protocol design lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 |-----|-----------|--------|
 | 1 | Repo setup, architecture design, Bluetooth device discovery | ✅ Done |
 | 2 | RFCOMM connection — server + client exchange plaintext messages | ✅ Done |
-| 3 | End-to-end encryption layer — X25519 key exchange + AES-256-GCM | ⬜ Pending |
+| 3 | End-to-end encryption layer — X25519 key exchange + AES-256-GCM | ✅ Done |
 | 4 | Chat interface (CLI) — message framing, contacts, reconnection handling | ⬜ Pending |
 | 5 | Testing, edge cases, docs, demo, final polish | ⬜ Pending |
 
@@ -82,9 +82,9 @@ On **Device B**, connect to it using the MAC address found via `discovery.py`:
 python src/client.py AA:BB:CC:DD:EE:FF
 ```
 
-Once connected, either side can type a message and hit Enter — messages arrive on the other side in real time. Type `/quit` on either side to end the session.
+Right after connecting, both sides run an X25519 key exchange automatically (you'll see "Performing key exchange..." then "Secure channel established"). From that point on, every message is encrypted with AES-256-GCM before it's sent — type a message and hit Enter, it arrives decrypted on the other side. Type `/quit` on either side to end the session.
 
-> Messages sent today are plaintext — encryption is added on Day 3. Don't rely on this for anything sensitive yet.
+Each run generates a fresh key pair, so every session gets its own encryption key — even if the same two devices connect again tomorrow, it's a brand new key.
 
 ## Project structure
 
@@ -98,8 +98,9 @@ BlueWhisper/
 └── src/
     ├── discovery.py         # Day 1: nearby device scanner
     ├── config.py            # Day 2: shared service name/UUID
-    ├── server.py            # Day 2: RFCOMM server (listens for a connection)
-    └── client.py            # Day 2: RFCOMM client (connects by MAC address)
+    ├── server.py            # Day 2-3: RFCOMM server + encrypted chat
+    ├── client.py            # Day 2-3: RFCOMM client + encrypted chat
+    └── crypto_utils.py      # Day 3: X25519 handshake, AES-256-GCM, framing
 ```
 
 ## License
