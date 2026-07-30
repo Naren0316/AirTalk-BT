@@ -1,14 +1,13 @@
 """
-BlueWhisper - Day 2: RFCOMM client.
+BlueWhisper - Day 3: RFCOMM client with end-to-end encryption.
 
-Connects to a BlueWhisper server running on another device (find its MAC
-address first with src/discovery.py) and exchanges plain text messages.
-
-Encryption is NOT implemented yet - that's Day 3. Everything sent today is
-plaintext, for testing the connection itself.
+Same Bluetooth connection as Day 2, but immediately after connecting, both
+sides perform an X25519 key exchange (see crypto_utils.py) and every message
+from then on is encrypted with AES-256-GCM. See docs/ARCHITECTURE.md for the
+full protocol design.
 
 Requirements:
-    pip install pybluez2
+    pip install pybluez2 cryptography
 
 Usage:
     python src/client.py <server_mac_address>
@@ -26,21 +25,24 @@ except ImportError:
     print("Missing dependency. Install it with:\n    pip install pybluez2")
     sys.exit(1)
 
+from cryptography.exceptions import InvalidTag
+
 from config import SERVICE_UUID
+from crypto_utils import perform_handshake, send_encrypted, recv_encrypted
 
 
-def listen_for_messages(sock):
-    """Read incoming messages from the socket and print them, until it closes."""
+def listen_for_messages(sock, key):
+    """Read, decrypt, and print incoming messages until the connection closes."""
     while True:
         try:
-            data = sock.recv(4096)
-        except OSError:
-            print("\n[Connection closed]")
-            break
-        if not data:
+            plaintext = recv_encrypted(sock, key)
+        except ConnectionError:
             print("\n[Connection closed by peer]")
             break
-        print(f"\rPeer: {data.decode('utf-8', errors='replace')}\nYou: ", end="", flush=True)
+        except InvalidTag:
+            print("\n[Received a message that failed verification - discarded]")
+            continue
+        print(f"\rPeer: {plaintext}\nYou: ", end="", flush=True)
 
 
 def start_client(server_mac: str):
@@ -61,9 +63,13 @@ def start_client(server_mac: str):
     sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
     sock.connect((host, port))
     print(f"Connected to {host}")
+
+    print("Performing key exchange...")
+    key = perform_handshake(sock)
+    print("Secure channel established - messages are now end-to-end encrypted.")
     print("Type a message and press Enter to send. Type /quit to exit.\n")
 
-    listener = threading.Thread(target=listen_for_messages, args=(sock,), daemon=True)
+    listener = threading.Thread(target=listen_for_messages, args=(sock, key), daemon=True)
     listener.start()
 
     try:
@@ -72,7 +78,7 @@ def start_client(server_mac: str):
             if message.strip().lower() in ("/quit", "/exit"):
                 break
             if message:
-                sock.send(message.encode("utf-8"))
+                send_encrypted(sock, key, message)
     except (KeyboardInterrupt, EOFError):
         pass
     finally:
