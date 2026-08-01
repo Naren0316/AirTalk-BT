@@ -6,7 +6,7 @@ Two devices with Bluetooth radios pair directly and exchange messages over a Blu
 
 ## Status
 
-🚧 Day 3 of 5 — messages are now end-to-end encrypted. See [Roadmap](#roadmap) below.
+🚧 Day 4 of 5 — proper chat app with contacts, reconnection, and message logs. See [Roadmap](#roadmap) below.
 
 ## Why
 
@@ -36,7 +36,7 @@ Full protocol design lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | 1 | Repo setup, architecture design, Bluetooth device discovery | ✅ Done |
 | 2 | RFCOMM connection — server + client exchange plaintext messages | ✅ Done |
 | 3 | End-to-end encryption layer — X25519 key exchange + AES-256-GCM | ✅ Done |
-| 4 | Chat interface (CLI) — message framing, contacts, reconnection handling | ⬜ Pending |
+| 4 | Chat interface (CLI) — message framing, contacts, reconnection handling | ✅ Done |
 | 5 | Testing, edge cases, docs, demo, final polish | ⬜ Pending |
 
 ## Requirements
@@ -56,35 +56,39 @@ pip install -r requirements.txt
 > **Linux users:** you'll also need the system Bluetooth dev headers first:
 > `sudo apt-get install bluetooth libbluetooth-dev`
 
-## Usage (Day 1)
+## Usage
 
-Scan for nearby discoverable Bluetooth devices:
-
-```bash
-python src/discovery.py
-```
-
-This prints the name and MAC address of every discoverable device nearby — the MAC address is what Day 2's connection code targets.
-
-### Day 2 — connect and chat (plaintext for now)
-
-On **Device A**, start the server:
+The easiest way to run BlueWhisper is `chat.py` — one menu that handles discovery, contacts, connecting, and the encrypted chat loop:
 
 ```bash
-python src/server.py
+python src/chat.py
 ```
 
-It prints the RFCOMM channel it's listening on and waits. Make sure this device is set to **discoverable**.
+```
+=== BlueWhisper ===
+1. Host a chat (wait for someone to connect to you)
+2. Connect to a saved contact
+3. Add a new contact (scan for nearby devices)
+4. Exit
+```
 
-On **Device B**, connect to it using the MAC address found via `discovery.py`:
+**First time messaging someone:** on one device, choose **1** to host. On the other, choose **3** to scan for nearby devices and save the host as a named contact, then choose **2** to connect to them.
+
+**After that:** just choose **2** and pick their name — no need to re-scan every time.
+
+Once connected, both sides automatically run an X25519 key exchange ("Performing key exchange..." → "Secure channel established"), then every message is encrypted with AES-256-GCM before it's sent. Type `/quit` to end the session. Each conversation is timestamped and saved to a local log file under `logs/` (git-ignored — this is local-only data, never transmitted).
+
+If a connection attempt fails, `chat.py` retries automatically (3 attempts, a few seconds apart) before giving up with a clear message — useful if the other device's Bluetooth briefly drops or hasn't started BlueWhisper yet.
+
+### Lower-level scripts (Days 1-3)
+
+These still work standalone and are useful for understanding each layer individually, or for quick manual testing without the contacts/menu system:
 
 ```bash
-python src/client.py AA:BB:CC:DD:EE:FF
+python src/discovery.py          # scan for nearby devices and their MAC addresses
+python src/server.py             # host mode: wait for one connection, encrypted chat
+python src/client.py AA:BB:CC:DD:EE:FF   # connect mode: connect by MAC address
 ```
-
-Right after connecting, both sides run an X25519 key exchange automatically (you'll see "Performing key exchange..." then "Secure channel established"). From that point on, every message is encrypted with AES-256-GCM before it's sent — type a message and hit Enter, it arrives decrypted on the other side. Type `/quit` on either side to end the session.
-
-Each run generates a fresh key pair, so every session gets its own encryption key — even if the same two devices connect again tomorrow, it's a brand new key.
 
 ## Project structure
 
@@ -98,9 +102,12 @@ BlueWhisper/
 └── src/
     ├── discovery.py         # Day 1: nearby device scanner
     ├── config.py            # Day 2: shared service name/UUID
-    ├── server.py            # Day 2-3: RFCOMM server + encrypted chat
-    ├── client.py            # Day 2-3: RFCOMM client + encrypted chat
-    └── crypto_utils.py      # Day 3: X25519 handshake, AES-256-GCM, framing
+    ├── server.py            # Day 2-3: RFCOMM server + encrypted chat (standalone)
+    ├── client.py            # Day 2-3: RFCOMM client + encrypted chat (standalone)
+    ├── crypto_utils.py      # Day 3: X25519 handshake, AES-256-GCM, framing
+    ├── contacts.py          # Day 4: local contact book (contacts.json)
+    ├── session.py           # Day 4: shared chat loop - timestamps + logging
+    └── chat.py              # Day 4: main menu-driven app (recommended entry point)
 ```
 
 ## License
