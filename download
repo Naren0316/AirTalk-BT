@@ -7,3 +7,7 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# Local runtime data - device-specific, never commit
+contacts.json
+logs/
