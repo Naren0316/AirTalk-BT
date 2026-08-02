@@ -32,6 +32,10 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 NONCE_SIZE = 12  # bytes - standard nonce size for AES-GCM
 LENGTH_PREFIX_SIZE = 4  # bytes - big-endian unsigned int
+MAX_FRAME_SIZE = 1_000_000  # bytes - generous for text messages; guards against
+                             # a corrupted or malicious length header causing a
+                             # huge memory allocation
+X25519_PUBLIC_KEY_SIZE = 32  # bytes - fixed size of a raw X25519 public key
 
 
 def generate_keypair():
@@ -84,6 +88,11 @@ def perform_handshake(sock) -> bytes:
     sock.send(struct.pack(">I", len(own_key_bytes)) + own_key_bytes)
 
     peer_key_len = struct.unpack(">I", _recv_exact(sock, LENGTH_PREFIX_SIZE))[0]
+    if peer_key_len != X25519_PUBLIC_KEY_SIZE:
+        raise ValueError(
+            f"Unexpected public key length ({peer_key_len} bytes) - the peer may "
+            "not be running BlueWhisper, or the handshake data was corrupted"
+        )
     peer_key_bytes = _recv_exact(sock, peer_key_len)
     peer_public_key = deserialize_public_key(peer_key_bytes)
 
@@ -126,6 +135,11 @@ def recv_encrypted(sock, key: bytes) -> str:
             verification (corrupted or tampered with).
     """
     length = struct.unpack(">I", _recv_exact(sock, LENGTH_PREFIX_SIZE))[0]
+    if not (0 < length <= MAX_FRAME_SIZE):
+        raise ValueError(
+            f"Received an invalid message length ({length} bytes) - the "
+            "connection may be out of sync or corrupted"
+        )
     payload = _recv_exact(sock, length)
     return decrypt_message(key, payload)
 
