@@ -56,15 +56,26 @@ def host_chat():
     )
 
     print(f"Waiting for a connection on RFCOMM channel {port}...")
-    print("Make sure this device is set to 'discoverable'.\n")
+    print("Make sure this device is set to 'discoverable'. (Ctrl+C to cancel)\n")
 
-    client_sock, client_info = server_sock.accept()
+    try:
+        client_sock, client_info = server_sock.accept()
+    except KeyboardInterrupt:
+        print("\nCancelled.")
+        server_sock.close()
+        return
     peer_mac = client_info[0]
     peer_label = _label_for_mac(peer_mac)
     print(f"Connected to {peer_label} ({peer_mac})")
 
     print("Performing key exchange...")
-    key = perform_handshake(client_sock)
+    try:
+        key = perform_handshake(client_sock)
+    except (ConnectionError, OSError, ValueError) as e:
+        print(f"Key exchange failed: {e}")
+        client_sock.close()
+        server_sock.close()
+        return
     print("Secure channel established.\n")
 
     run_chat_session(client_sock, key, peer_label)
@@ -108,7 +119,10 @@ def connect_to_contact():
 
             run_chat_session(sock, key, name)
             return
-        except (bluetooth.BluetoothError, OSError, ConnectionError) as e:
+        except KeyboardInterrupt:
+            print("\nCancelled.")
+            return
+        except (bluetooth.BluetoothError, OSError, ConnectionError, ValueError) as e:
             print(f"Couldn't connect: {e}")
             if attempt < MAX_CONNECT_RETRIES:
                 print(f"Retrying in {RETRY_DELAY_SECONDS} seconds...")
@@ -146,7 +160,11 @@ def main_menu():
         print("2. Connect to a saved contact")
         print("3. Add a new contact (scan for nearby devices)")
         print("4. Exit")
-        choice = input("\nChoose an option: ").strip()
+        try:
+            choice = input("\nChoose an option: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nGoodbye!")
+            break
 
         if choice == "1":
             host_chat()
