@@ -39,8 +39,14 @@ def listen_for_messages(sock, key):
         except ConnectionError:
             print("\n[Connection closed by peer]")
             break
+        except OSError:
+            print("\n[Connection lost]")
+            break
         except InvalidTag:
             print("\n[Received a message that failed verification - discarded]")
+            continue
+        except ValueError as e:
+            print(f"\n[Received malformed data, discarded: {e}]")
             continue
         print(f"\rPeer: {plaintext}\nYou: ", end="", flush=True)
 
@@ -69,7 +75,13 @@ def start_server():
     print(f"Connected to {client_info[0]}")
 
     print("Performing key exchange...")
-    key = perform_handshake(client_sock)
+    try:
+        key = perform_handshake(client_sock)
+    except (ConnectionError, OSError, ValueError) as e:
+        print(f"Key exchange failed: {e}")
+        client_sock.close()
+        server_sock.close()
+        return
     print("Secure channel established - messages are now end-to-end encrypted.")
     print("Type a message and press Enter to send. Type /quit to exit.\n")
 
@@ -81,8 +93,13 @@ def start_server():
             message = input("You: ")
             if message.strip().lower() in ("/quit", "/exit"):
                 break
-            if message:
+            if not message:
+                continue
+            try:
                 send_encrypted(client_sock, key, message)
+            except OSError:
+                print("[Couldn't send - connection lost]")
+                break
     except (KeyboardInterrupt, EOFError):
         pass
     finally:
