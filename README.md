@@ -6,7 +6,7 @@ Two devices with Bluetooth radios pair directly and exchange messages over a Blu
 
 ## Status
 
-🚧 Day 4 of 5 — proper chat app with contacts, reconnection, and message logs. See [Roadmap](#roadmap) below.
+✅ All 5 days complete — see [Roadmap](#roadmap) for what each day added.
 
 ## Why
 
@@ -37,7 +37,7 @@ Full protocol design lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | 2 | RFCOMM connection — server + client exchange plaintext messages | ✅ Done |
 | 3 | End-to-end encryption layer — X25519 key exchange + AES-256-GCM | ✅ Done |
 | 4 | Chat interface (CLI) — message framing, contacts, reconnection handling | ✅ Done |
-| 5 | Testing, edge cases, docs, demo, final polish | ⬜ Pending |
+| 5 | Testing, edge cases, docs, demo, final polish | ✅ Done |
 
 ## Requirements
 
@@ -55,6 +55,8 @@ pip install -r requirements.txt
 
 > **Linux users:** you'll also need the system Bluetooth dev headers first:
 > `sudo apt-get install bluetooth libbluetooth-dev`
+
+To also run the test suite, additionally install `requirements-dev.txt` (see [Testing](#testing) below).
 
 ## Usage
 
@@ -90,6 +92,37 @@ python src/server.py             # host mode: wait for one connection, encrypted
 python src/client.py AA:BB:CC:DD:EE:FF   # connect mode: connect by MAC address
 ```
 
+## Testing
+
+The encryption layer, contact book, and chat logging are covered by an automated test suite that runs without any Bluetooth hardware — `crypto_utils.py`'s tests use a local loopback socket pair (`socket.socketpair()`), which has the identical `send()`/`recv()` interface a real Bluetooth socket has.
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
+```
+
+23 tests, covering:
+- the handshake produces matching keys on both sides, and a fresh key every session
+- messages round-trip correctly (including empty strings and Unicode)
+- tampered ciphertext and a wrong decryption key are both rejected
+- a disconnect mid-read raises a clean error instead of hanging
+- a corrupted/oversized length header is rejected before it can trigger a huge allocation
+- a malformed handshake message is rejected cleanly
+- the contact book's add/get/list/overwrite/remove behavior, including recovering from a corrupted `contacts.json`
+- chat log file naming and writing, including sanitizing MAC-address characters that aren't filename-safe
+
+What's **not** covered by automated tests (needs real hardware, see [docs/DEMO.md](docs/DEMO.md) for a manual walkthrough): actual Bluetooth device discovery, RFCOMM connection/acceptance, and the interactive chat loop's I/O.
+
+## Known limitations
+
+Worth being upfront about, especially if this comes up in a review:
+
+- **Direct connections only** — no multi-hop mesh relay. Both devices need to be within Bluetooth range of each other (see [Architecture](docs/ARCHITECTURE.md#5-why-not-ble--a-mesh-network) for why).
+- **No identity verification beyond Bluetooth pairing** — the encryption guarantees the *content* wasn't read or tampered with in transit, but doesn't independently confirm you're talking to the right person, beyond having connected to the right MAC address. Apps like Signal add a manual safety-number comparison for this; BlueWhisper doesn't yet.
+- **One connection at a time** — the server accepts a single client per run; no group chats.
+- **Chat logs are stored as plaintext locally** — readable to anyone with access to the device's filesystem, since they're decrypted for you to read. They're never transmitted anywhere.
+- **PyBluez2's BLE peripheral support is Linux-only** — this project deliberately uses Bluetooth Classic (RFCOMM) instead, specifically to avoid that limitation (see the architecture doc for the reasoning).
+
 ## Project structure
 
 ```
@@ -97,8 +130,15 @@ BlueWhisper/
 ├── README.md
 ├── LICENSE
 ├── requirements.txt
+├── requirements-dev.txt     # Day 5: pytest, for running tests/
 ├── docs/
-│   └── ARCHITECTURE.md      # protocol + encryption design
+│   ├── ARCHITECTURE.md      # protocol + encryption design
+│   └── DEMO.md              # Day 5: script for recording a demo
+├── tests/                   # Day 5: automated test suite (23 tests)
+│   ├── conftest.py
+│   ├── test_crypto_utils.py
+│   ├── test_contacts.py
+│   └── test_session.py
 └── src/
     ├── discovery.py         # Day 1: nearby device scanner
     ├── config.py            # Day 2: shared service name/UUID
