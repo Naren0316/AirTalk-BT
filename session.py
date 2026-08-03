@@ -48,8 +48,14 @@ def _listen_for_messages(sock, key, log_file: str):
         except ConnectionError:
             print("\n[Connection closed by peer]")
             break
+        except OSError:
+            print("\n[Connection lost]")
+            break
         except InvalidTag:
             print("\n[Received a message that failed verification - discarded]")
+            continue
+        except ValueError as e:
+            print(f"\n[Received malformed data, discarded: {e}]")
             continue
         line = f"[{_timestamp()}] Peer: {plaintext}"
         print(f"\r{line}\nYou: ", end="", flush=True)
@@ -78,9 +84,14 @@ def run_chat_session(sock, key, peer_label: str):
             message = input("You: ")
             if message.strip().lower() in ("/quit", "/exit"):
                 break
-            if message:
+            if not message:
+                continue
+            try:
                 send_encrypted(sock, key, message)
-                _append_log(log_file, f"[{_timestamp()}] You: {message}")
+            except OSError:
+                print("[Couldn't send - connection lost]")
+                break
+            _append_log(log_file, f"[{_timestamp()}] You: {message}")
     except (KeyboardInterrupt, EOFError):
         pass
     finally:
